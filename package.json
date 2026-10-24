@@ -1,6 +1,6 @@
 {
   "name": "pi-codex-quota",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Codex subscription quotas and estimated monthly Pi usage costs in the footer.",
   "type": "module",
   "keywords": ["pi-package", "pi-extension", "codex", "quota", "usage"],

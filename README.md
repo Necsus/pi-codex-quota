@@ -47,7 +47,7 @@ Les coûts et quotas sont actualisés :
 - à la fin complète d’une tâche agentique (`agent_settled`), et non à chaque appel d’outil ou réponse intermédiaire ;
 - à la demande avec `/quota`, quand le fournisseur actif est `openai-codex`.
 
-Le minuteur redessine uniquement les comptes à rebours chaque minute : il ne déclenche aucune lecture d’historique ni requête réseau périodique. Les données de quota sont signalées comme périmées après six minutes sans actualisation, ou si une actualisation échoue. OpenAI peut mettre un délai à refléter la consommation.
+Le minuteur redessine uniquement les comptes à rebours chaque minute : il ne déclenche aucune lecture d’historique ni requête réseau périodique. Un astérisque discret après « Codex restant » (`Codex restant*`) signale des données périmées après six minutes sans actualisation, ou si une actualisation échoue. Les valeurs affichées restent les dernières connues ; `/quota` permet de demander une actualisation. OpenAI peut mettre un délai à refléter la consommation.
 
 ## Calcul du coût mensuel
 

@@ -92,7 +92,7 @@ export default function (pi: ExtensionAPI) {
 				return `${label} : ${Math.floor(window.remaining)}%${reset}`;
 			});
 			const stale = failure !== undefined || now - snapshot.capturedAt >= POLL_MS + MIN_REFRESH_MS;
-			right = `Codex restant · ${parts.join(" · ")}${stale ? " · données périmées" : ""}`;
+			right = `Codex restant${stale ? "*" : ""} · ${parts.join(" · ")}`;
 		}
 		const width = Math.max(1, process.stdout.columns || 80);
 		const leftText = truncateToWidth(left, width, "…");

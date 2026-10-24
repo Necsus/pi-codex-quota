@@ -1,9 +1,12 @@
 {
   "name": "pi-codex-quota",
-  "version": "0.1.1",
-  "description": "Codex subscription quotas and estimated monthly Pi usage costs in the footer.",
+  "version": "0.2.0",
+  "description": "Provider-aware Codex and Anthropic subscription quotas with estimated monthly Pi usage costs in the footer.",
   "type": "module",
-  "keywords": ["pi-package", "pi-extension", "codex", "quota", "usage"],
+  "keywords": ["pi-package", "pi-extension", "codex", "anthropic", "quota", "usage"],
+  "scripts": {
+    "test": "node --test tests/*.test.ts"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/Necsus/pi-codex-quota.git"

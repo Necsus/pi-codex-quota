@@ -1,0 +1,19 @@
+{
+  "name": "pi-codex-quota",
+  "version": "0.1.0",
+  "description": "Codex subscription quotas and estimated monthly Pi usage costs in the footer.",
+  "type": "module",
+  "keywords": ["pi-package", "pi-extension", "codex", "quota", "usage"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Necsus/pi-codex-quota.git"
+  },
+  "files": ["src", "README.md"],
+  "pi": {
+    "extensions": ["./src/codex-quota.ts"]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": ">=1.4.0 <2",
+    "@earendil-works/pi-tui": "*"
+  }
+}

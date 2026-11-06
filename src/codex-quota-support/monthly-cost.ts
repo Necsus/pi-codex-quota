@@ -1,7 +1,6 @@
 import { createReadStream } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
-import { createInterface } from "node:readline";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
 type CostEntry = { key: string; cost: number };
@@ -11,6 +10,30 @@ export type MonthlyCost = { month: string; label: string; total: number; incompl
 function record(value: unknown): Record<string, unknown> | undefined {
 	return value !== null && typeof value === "object" && !Array.isArray(value)
 		? value as Record<string, unknown> : undefined;
+}
+
+async function* readJsonLines(file: string): AsyncGenerator<string> {
+	const stream = createReadStream(file, { encoding: "utf8" });
+	// Buffer only the current record: tool results can be large, and Unicode separators are valid JSON text.
+	let fragments: string[] = [];
+	try {
+		for await (const chunk of stream) {
+			const text: string = chunk;
+			let start = 0;
+			let newline: number;
+			// JSONL records end only at LF; a trailing CR in CRLF is valid JSON whitespace.
+			while ((newline = text.indexOf("\n", start)) !== -1) {
+				fragments.push(text.slice(start, newline));
+				yield fragments.join("");
+				fragments = [];
+				start = newline + 1;
+			}
+			if (start < text.length) fragments.push(text.slice(start));
+		}
+		if (fragments.length) yield fragments.join("");
+	} finally {
+		stream.destroy();
+	}
 }
 
 export class MonthlyCostReader {
@@ -55,32 +78,25 @@ export class MonthlyCostReader {
 				let cached = this.cache.get(file);
 				if (cached?.signature !== signature) {
 					cached = { signature, entries: [], incomplete: false };
-					const stream = createReadStream(file, { encoding: "utf8" });
-					const lines = createInterface({ input: stream, crlfDelay: Infinity });
-					try {
-						for await (const line of lines) {
-							if (!line.trim()) continue;
-							try {
-								const entry = record(JSON.parse(line));
-								if (!entry || typeof entry.timestamp !== "string") continue;
-								const timestamp = Date.parse(entry.timestamp);
-								if (!(timestamp >= start && timestamp < end)) continue;
-								const message = record(entry.message);
-								// Pi also records paid nested tools, compactions and summaries outside assistant messages.
-								const usage = record(entry.usage) ?? record(message?.usage);
-								const cost = record(usage?.cost)?.total;
-								if (typeof cost !== "number" || !Number.isFinite(cost) || cost < 0) continue;
-								const key = typeof entry.id === "string"
-									? JSON.stringify([entry.id, entry.timestamp, entry.type, message?.role, message?.provider, message?.model, message?.responseId])
-									: `${file}:${cached.entries.length}`;
-								cached.entries.push({ key, cost });
-							} catch {
-								cached.incomplete = true;
-							}
+					for await (const line of readJsonLines(file)) {
+						if (!line.trim()) continue;
+						try {
+							const entry = record(JSON.parse(line));
+							if (!entry || typeof entry.timestamp !== "string") continue;
+							const timestamp = Date.parse(entry.timestamp);
+							if (!(timestamp >= start && timestamp < end)) continue;
+							const message = record(entry.message);
+							// Pi also records paid nested tools, compactions and summaries outside assistant messages.
+							const usage = record(entry.usage) ?? record(message?.usage);
+							const cost = record(usage?.cost)?.total;
+							if (typeof cost !== "number" || !Number.isFinite(cost) || cost < 0) continue;
+							const key = typeof entry.id === "string"
+								? JSON.stringify([entry.id, entry.timestamp, entry.type, message?.role, message?.provider, message?.model, message?.responseId])
+								: `${file}:${cached.entries.length}`;
+							cached.entries.push({ key, cost });
+						} catch {
+							cached.incomplete = true;
 						}
-					} finally {
-						lines.close();
-						stream.destroy();
 					}
 					// Cache only metadata and costs; never retain prompts, responses or credentials.
 					this.cache.set(file, cached);

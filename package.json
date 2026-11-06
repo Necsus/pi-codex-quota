@@ -1,6 +1,6 @@
 {
   "name": "pi-codex-quota",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Provider-aware Codex and Anthropic subscription quotas with estimated monthly Pi usage costs in the footer.",
   "type": "module",
   "keywords": ["pi-package", "pi-extension", "codex", "anthropic", "quota", "usage"],

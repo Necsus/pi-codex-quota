@@ -122,7 +122,7 @@ for (const [provider, payload, label, percent, endpoint] of [
 		assert.deepEqual(app.authProviders, [provider, provider]);
 		app.settle();
 		await flush();
-		assert.equal(fetchMock.mock.callCount(), 3);
+		assert.equal(fetchMock.mock.callCount(), 2);
 	});
 
 	test(`${provider}: API key authentication cannot request subscription quotas`, async (t) => {
@@ -138,6 +138,7 @@ for (const [provider, payload, label, percent, endpoint] of [
 }
 
 test("unsupported providers hide only quotas and never request quota auth or network", async (t) => {
+	t.mock.timers.enable({ apis: ["Date", "setInterval", "setTimeout"], now: Date.now() });
 	const fetchMock = t.mock.method(globalThis, "fetch", async () => { throw new Error("unexpected request"); });
 	const app = harness(t, "openrouter");
 	app.start();
@@ -146,6 +147,7 @@ test("unsupported providers hide only quotas and never request quota auth or net
 	assert.doesNotMatch(app.text(), /Codex|Anthropic|quota|restant/);
 	await app.quota();
 	assert.match(app.notifications[0], /fournisseur pris en charge/);
+	t.mock.timers.tick(10 * 60_000);
 	app.settle();
 	await flush();
 	assert.equal(fetchMock.mock.callCount(), 0);
@@ -153,10 +155,12 @@ test("unsupported providers hide only quotas and never request quota auth or net
 });
 
 test("non-interactive sessions do not read costs or request quotas", async (t) => {
+	t.mock.timers.enable({ apis: ["Date", "setInterval", "setTimeout"], now: Date.now() });
 	const fetchMock = t.mock.method(globalThis, "fetch", async () => { throw new Error("unexpected request"); });
 	const app = harness(t, "anthropic", "json");
 	app.start();
 	app.settle();
+	t.mock.timers.tick(10 * 60_000);
 	await flush();
 	assert.equal(app.text(), "");
 	assert.equal(app.costMock.mock.callCount(), 0);
@@ -294,7 +298,7 @@ test("network and format errors show only a sanitized error, never credentials o
 	assert.doesNotMatch(app.text(), /private|header\.|signature/);
 });
 
-test("partial and expired windows are explicit; stale countdown rendering never fetches", async (t) => {
+test("partial and expired windows are explicit; resize rendering never fetches", async (t) => {
 	let now = Date.now();
 	t.mock.method(Date, "now", () => now);
 	const fetchMock = t.mock.method(globalThis, "fetch", async () => Response.json({
@@ -312,6 +316,141 @@ test("partial and expired windows are explicit; stale countdown rendering never 
 	process.stdout.columns = 32;
 	process.stdout.emit("resize");
 	assert.ok(Array.from(app.text()).length <= 32);
+});
+
+for (const [provider, payload] of [
+	["openai-codex", codexUsage],
+	["anthropic", anthropicUsage],
+] as const) {
+	test(`${provider}: settled tasks throttle quota attempts for one minute without throttling costs`, async (t) => {
+		let now = Date.now();
+		t.mock.method(Date, "now", () => now);
+		const fetchMock = t.mock.method(globalThis, "fetch", async () => Response.json(payload));
+		const app = harness(t, provider);
+		app.start();
+		await flush();
+		app.settle();
+		await flush();
+		now += 59_999;
+		app.settle();
+		await flush();
+		assert.equal(fetchMock.mock.callCount(), 1);
+		assert.equal(app.costMock.mock.callCount(), 3);
+		now++;
+		app.settle();
+		await flush();
+		assert.equal(fetchMock.mock.callCount(), 2);
+		assert.equal(app.costMock.mock.callCount(), 4);
+	});
+
+	test(`${provider}: idle polling refreshes quotas every five minutes, not costs`, async (t) => {
+		t.mock.timers.enable({ apis: ["Date", "setInterval", "setTimeout"], now: Date.now() });
+		let updated = false;
+		const fetchMock = t.mock.method(globalThis, "fetch", async () => Response.json(updated
+			? (provider === "anthropic"
+				? { five_hour: { utilization: 90 }, seven_day: { utilization: 95 } }
+				: { rate_limit: { primary_window: { limit_window_seconds: 18_000, used_percent: 90 } } })
+			: payload));
+		const app = harness(t, provider);
+		app.start();
+		await flush();
+		for (let minute = 0; minute < 4; minute++) {
+			t.mock.timers.tick(60_000);
+			await flush();
+		}
+		assert.equal(fetchMock.mock.callCount(), 1);
+		updated = true;
+		t.mock.timers.tick(60_000);
+		await flush();
+		assert.equal(fetchMock.mock.callCount(), 2);
+		assert.match(app.text(), /restant · 5h : 10%/);
+		t.mock.timers.tick(5 * 60_000);
+		await flush();
+		assert.equal(fetchMock.mock.callCount(), 3);
+		assert.equal(app.costMock.mock.callCount(), 1);
+		app.stop();
+		const statusCount = app.statuses.length;
+		t.mock.timers.tick(10 * 60_000);
+		await flush();
+		assert.equal(fetchMock.mock.callCount(), 3);
+		assert.equal(app.statuses.length, statusCount);
+	});
+}
+
+test("polling respects recent manual refreshes; /quota bypasses the one-minute limit", async (t) => {
+	t.mock.timers.enable({ apis: ["Date", "setInterval", "setTimeout"], now: Date.now() });
+	const fetchMock = t.mock.method(globalThis, "fetch", async () => Response.json(anthropicUsage));
+	const app = harness(t, "anthropic");
+	app.start();
+	await flush();
+	t.mock.timers.tick(4 * 60_000 + 30_000);
+	await app.quota();
+	assert.equal(fetchMock.mock.callCount(), 2);
+	t.mock.timers.tick(30_000);
+	await flush();
+	assert.equal(fetchMock.mock.callCount(), 2);
+	await app.quota();
+	assert.equal(fetchMock.mock.callCount(), 3);
+	app.settle();
+	await flush();
+	assert.equal(fetchMock.mock.callCount(), 3);
+});
+
+test("failed attempts are throttled and periodic polling retries with stale data preserved", async (t) => {
+	t.mock.timers.enable({ apis: ["Date", "setInterval", "setTimeout"], now: Date.now() });
+	let fail = false;
+	const fetchMock = t.mock.method(globalThis, "fetch", async () => {
+		if (fail) throw new Error("private failure");
+		return Response.json(anthropicUsage);
+	});
+	const app = harness(t, "anthropic");
+	app.start();
+	await flush();
+	fail = true;
+	t.mock.timers.tick(60_000);
+	app.settle();
+	await flush();
+	assert.match(app.text(), /Anthropic restant\* · 5h : 75%/);
+	app.settle();
+	await flush();
+	assert.equal(fetchMock.mock.callCount(), 2);
+	fail = false;
+	t.mock.timers.tick(4 * 60_000);
+	await flush();
+	assert.equal(fetchMock.mock.callCount(), 3);
+	assert.match(app.text(), /Anthropic restant · 5h : 75%/);
+});
+
+test("periodic ticks share a pending request and model changes replace the polling timer", async (t) => {
+	t.mock.timers.enable({ apis: ["Date", "setInterval", "setTimeout"], now: Date.now() });
+	const late = deferred<Response>();
+	const fetchMock = t.mock.method(globalThis, "fetch", (url) => String(url).includes("chatgpt")
+		? late.promise : Promise.resolve(Response.json(anthropicUsage)));
+	const app = harness(t);
+	app.start();
+	await flush();
+	t.mock.timers.tick(5 * 60_000);
+	await flush();
+	assert.equal(fetchMock.mock.callCount(), 1);
+	t.mock.timers.tick(30_000);
+	app.select("anthropic");
+	await flush();
+	late.resolve(Response.json(codexUsage));
+	await flush();
+	t.mock.timers.tick(4 * 60_000 + 30_000);
+	await flush();
+	assert.equal(fetchMock.mock.callCount(), 2);
+	t.mock.timers.tick(30_000);
+	await flush();
+	assert.equal(fetchMock.mock.callCount(), 3);
+	assert.match(app.text(), /Anthropic restant/);
+	app.select("openrouter");
+	await flush();
+	t.mock.timers.tick(10 * 60_000);
+	await flush();
+	assert.equal(fetchMock.mock.callCount(), 3);
+	assert.deepEqual(app.authProviders, ["openai-codex", "anthropic", "anthropic"]);
+	assert.doesNotMatch(app.text(), /restant|quota/);
 });
 
 test("concurrent refreshes share one request and shutdown clears status and listeners", async (t) => {

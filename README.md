@@ -52,15 +52,20 @@ pi install ./pi-codex-quota
 
 ## Actualisation
 
-Les coûts et quotas sont actualisés :
+Les quotas à droite sont actualisés :
 
-- au chargement de la session et lors d’un changement de modèle ;
-- à la fin complète d’une tâche agentique (`agent_settled`), et non à chaque appel d’outil ou réponse intermédiaire ;
-- à la demande avec `/quota`, quand le fournisseur actif est `openai-codex` ou `anthropic`.
+- immédiatement au chargement de la session et lors d’un changement de modèle ;
+- à la fin complète d’une tâche agentique (`agent_settled`), si la dernière tentative remonte à au moins une minute, et non à chaque appel d’outil ou réponse intermédiaire ;
+- automatiquement sur un minuteur de cinq minutes, même pendant une tâche ou lorsque la session est inactive, avec la même limite d’une minute entre tentatives ;
+- immédiatement à la demande avec `/quota`, qui contourne cette limite, quand le fournisseur actif est `openai-codex` ou `anthropic`.
+
+Une requête déjà en cours est partagée, sans lancer de requête supplémentaire. Une tentative échouée compte aussi pour la limite d’une minute. Un passage du minuteur ignoré après une tentative récente n’est pas reprogrammé : le prochain passage reste prévu cinq minutes plus tard. Chaque instance Pi possède son propre minuteur, arrêté à la fermeture de la session ou remplacé lors d’un changement de modèle.
+
+Le coût mensuel à gauche conserve son fonctionnement : actualisation au chargement, au changement de modèle, à chaque fin complète de tâche et avec `/quota` pour un fournisseur pris en charge. Aucune lecture périodique des historiques n’est ajoutée.
 
 Un changement de modèle efface les quotas précédents et annule la requête en cours, afin de ne jamais afficher les données d’un autre fournisseur. Avec un fournisseur non pris en charge, seule la partie coût reste visible.
 
-Le minuteur redessine uniquement les comptes à rebours chaque minute : il ne déclenche aucune lecture d’historique ni requête réseau périodique. Un astérisque discret après « Codex restant » ou « Anthropic restant » signale des données périmées après six minutes sans actualisation, ou si une actualisation échoue. Les valeurs affichées restent les dernières connues, sauf après un refus d’authentification (HTTP 401/403), qui les efface ; `/quota` permet de demander une actualisation. Les fournisseurs peuvent mettre un délai à refléter la consommation. Une fenêtre absente est indiquée « non communiqué » ; un compte à rebours expiré est indiqué « à actualiser ».
+Un minuteur distinct redessine les comptes à rebours chaque minute, sans lecture d’historique ni requête réseau. Un astérisque discret après « Codex restant » ou « Anthropic restant » signale des données périmées après six minutes sans actualisation, ou si une actualisation échoue. Les valeurs affichées restent les dernières connues, sauf après un refus d’authentification (HTTP 401/403), qui les efface ; `/quota` permet de demander une actualisation. Les fournisseurs peuvent mettre un délai à refléter la consommation. Une fenêtre absente est indiquée « non communiqué » ; un compte à rebours expiré est indiqué « à actualiser ».
 
 ## Calcul du coût mensuel
 
@@ -94,13 +99,14 @@ Avec Node.js 22.18 ou plus récent (prise en charge native de TypeScript), sans 
 npm test
 ```
 
-Les tests couvrent le routage par fournisseur, les formats de réponse, les pourcentages restants, les erreurs d’authentification et réseau, `/quota`, les requêtes concurrentes et les changements rapides de fournisseur. Les appels réseau, l’historique de coûts et les fonctions d’affichage de Pi sont simulés : aucun compte réel n’est utilisé.
+Les tests couvrent le routage par fournisseur, les formats de réponse, les pourcentages restants, les erreurs d’authentification et réseau, `/quota`, les requêtes concurrentes et les changements rapides de fournisseur. Des horloges simulées vérifient aussi l’actualisation périodique des quotas, la limite d’une minute entre tentatives automatiques, l’absence de lecture périodique des coûts et l’arrêt des minuteurs. Les appels réseau, l’historique de coûts et les fonctions d’affichage de Pi sont simulés : aucun compte réel n’est utilisé.
 
 ## Vérification manuelle
 
 1. Exécuter `/reload`, sélectionner un modèle `openai-codex`, puis `/quota` : vérifier la ligne sous le modèle et comparer au tableau de bord Codex du même compte.
 2. Sélectionner un modèle `anthropic` connecté via OAuth, puis `/quota` : comparer les quotas 5 h et semaine à ceux du même compte Claude.
-3. Terminer une tâche agentique : vérifier l’actualisation des chiffres à sa fin.
+3. Attendre au moins une minute depuis la dernière tentative, puis terminer une tâche agentique : les quotas sont actualisés à sa fin. Des tâches rapprochées ne relancent pas de requête avant ce délai ; `/quota` permet de forcer l’actualisation.
+   Laisser ensuite la session ouverte sans interaction pendant cinq minutes après `/reload` : les quotas sont actualisés automatiquement, mais pas le coût mensuel. Un chiffre inchangé ne prouve pas l’absence de requête : la consommation peut être stable ou reflétée avec retard par le fournisseur.
 4. Redimensionner le terminal : vérifier l’alignement et la troncature.
 5. Passer à un fournisseur non pris en charge : vérifier que seul le montant mensuel reste affiché.
 6. Changer rapidement entre Codex, Anthropic et un autre fournisseur : vérifier qu’aucun ancien quota ne réapparaît.

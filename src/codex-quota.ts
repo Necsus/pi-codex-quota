@@ -21,6 +21,7 @@ export default function (pi: ExtensionAPI) {
 	let snapshot: Snapshot | undefined;
 	let failure: string | undefined;
 	let timer: ReturnType<typeof setInterval> | undefined;
+	let quotaTimer: ReturnType<typeof setInterval> | undefined;
 	let controller: AbortController | undefined;
 	let pending: Promise<void> | undefined;
 	let lastAttempt = 0;
@@ -153,7 +154,9 @@ export default function (pi: ExtensionAPI) {
 	function stop() {
 		generation++;
 		if (timer) clearInterval(timer);
+		if (quotaTimer) clearInterval(quotaTimer);
 		timer = undefined;
+		quotaTimer = undefined;
 		process.stdout.off("resize", render);
 		costPending = undefined;
 		monthlyCost = undefined;
@@ -175,18 +178,20 @@ export default function (pi: ExtensionAPI) {
 		context = ctx;
 		render();
 		process.stdout.on("resize", render);
-		void refresh();
+		void refresh(true);
 		void refreshCost();
-		// Only repaint countdowns here; disk and network refreshes wait until the task settles.
+		// Keep countdown repainting separate from quota polling; neither timer reads costs.
 		timer = setInterval(render, MIN_REFRESH_MS);
 		timer.unref();
+		quotaTimer = setInterval(() => { void refresh(); }, POLL_MS);
+		quotaTimer.unref();
 	}
 
 	pi.on("session_start", (_event, ctx) => start(ctx));
 	pi.on("model_select", (_event, ctx) => start(ctx));
 	pi.on("agent_settled", (_event, ctx) => {
 		context = ctx.mode === "tui" ? ctx : undefined;
-		void refresh(true);
+		void refresh();
 		void refreshCost();
 	});
 	pi.on("session_shutdown", () => stop());

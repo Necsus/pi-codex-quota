@@ -39,7 +39,11 @@ export default function (pi: ExtensionAPI) {
 		const currentCost = monthlyCost?.month === month ? monthlyCost : undefined;
 		const label = monthDate.toLocaleDateString("fr-FR", { month: "short", year: "numeric" });
 		const amount = currentCost ? `≈${currentCost.total.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $` : costFailed ? "indisponible" : "calcul…";
-		const left = `Pi · ${label} · ${amount}${currentCost?.incomplete || costFailed ? " · incomplet" : ""}`;
+		const providerId = context.model?.provider;
+		const providerAmount = currentCost && providerId
+			? ` · ${providerId} ≈${(currentCost.byProvider[providerId] ?? 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $`
+			: "";
+		const left = `Pi · ${label} · ${amount}${providerAmount}${currentCost?.incomplete || costFailed ? " · incomplet" : ""}`;
 		const provider = getQuotaProvider(context.model?.provider);
 		const currentSnapshot = snapshot?.provider === provider?.id ? snapshot : undefined;
 		let right = "";

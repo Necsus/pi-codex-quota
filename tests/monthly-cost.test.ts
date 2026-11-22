@@ -86,6 +86,23 @@ test("preserves a Unicode separator spanning UTF-8 stream chunks in a large reco
 	assert.equal(result.incomplete, false);
 });
 
+test("sums costs by recorded provider, retaining unattributed costs only in the global total", async (t) => {
+	const app = await fixture(t);
+	const codex = paidEntry("codex", 2);
+	const anthropic = paidEntry("anthropic", 3);
+	const codexWithProvider = { ...codex, message: { ...codex.message, provider: "openai-codex" } };
+	const anthropicWithProvider = { ...anthropic, message: { ...anthropic.message, provider: "anthropic" } };
+	await app.write([codexWithProvider, codexWithProvider, anthropicWithProvider, paidEntry("unknown", 4)]
+		.map((entry) => JSON.stringify(entry)).join("\n"));
+	for (let attempt = 0; attempt < 2; attempt++) {
+		const result = await app.reader.read(app.sessionDir);
+		assert.equal(result.total, 9);
+		assert.equal(result.byProvider["openai-codex"], 2);
+		assert.equal(result.byProvider.anthropic, 3);
+		assert.equal(result.incomplete, false);
+	}
+});
+
 test("still marks malformed JSON as incomplete and retains readable costs", async (t) => {
 	const app = await fixture(t);
 	await app.write([

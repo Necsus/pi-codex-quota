@@ -3,9 +3,9 @@ import { readdir, stat } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
-type CostEntry = { key: string; cost: number };
+type CostEntry = { key: string; cost: number; provider?: string };
 type CachedFile = { signature: string; entries: CostEntry[]; incomplete: boolean };
-export type MonthlyCost = { month: string; label: string; total: number; incomplete: boolean };
+export type MonthlyCost = { month: string; label: string; total: number; byProvider: Record<string, number>; incomplete: boolean };
 
 function record(value: unknown): Record<string, unknown> | undefined {
 	return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -50,6 +50,7 @@ export class MonthlyCostReader {
 			month,
 			label: now.toLocaleDateString("fr-FR", { month: "short", year: "numeric" }),
 			total: 0,
+			byProvider: Object.create(null),
 			incomplete: false,
 		};
 		const root = resolve(getAgentDir(), "sessions");
@@ -93,7 +94,9 @@ export class MonthlyCostReader {
 							const key = typeof entry.id === "string"
 								? JSON.stringify([entry.id, entry.timestamp, entry.type, message?.role, message?.provider, message?.model, message?.responseId])
 								: `${file}:${cached.entries.length}`;
-							cached.entries.push({ key, cost });
+							const provider = typeof message?.provider === "string" && message.provider.length > 0
+								? message.provider : undefined;
+							cached.entries.push({ key, cost, provider });
 						} catch {
 							cached.incomplete = true;
 						}
@@ -106,6 +109,7 @@ export class MonthlyCostReader {
 					if (seen.has(entry.key)) continue;
 					seen.add(entry.key);
 					result.total += entry.cost;
+					if (entry.provider) result.byProvider[entry.provider] = (result.byProvider[entry.provider] ?? 0) + entry.cost;
 				}
 			} catch {
 				result.incomplete = true;

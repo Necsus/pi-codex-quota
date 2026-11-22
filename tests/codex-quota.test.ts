@@ -51,7 +51,7 @@ function harness(t: TestContext, provider = "openai-codex", mode = "tui") {
 	const date = new Date();
 	const month = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 	const costMock = t.mock.method(MonthlyCostReader.prototype, "read", async () => ({
-		month, label: "test", total: 12.34, incomplete: false,
+		month, label: "test", total: 12.34, byProvider: { "openai-codex": 3, anthropic: 4, openrouter: 5 }, incomplete: false,
 	}));
 	const columns = Object.getOwnPropertyDescriptor(process.stdout, "columns");
 	Object.defineProperty(process.stdout, "columns", { value: 240, configurable: true, writable: true });
@@ -152,6 +152,23 @@ test("unsupported providers hide only quotas and never request quota auth or net
 	await flush();
 	assert.equal(fetchMock.mock.callCount(), 0);
 	assert.deepEqual(app.authProviders, []);
+});
+
+test("monthly provider total follows model selection, including unsupported providers", async (t) => {
+	t.mock.method(globalThis, "fetch", async () => Response.json(codexUsage));
+	const app = harness(t);
+	app.start();
+	await flush();
+	assert.match(app.text(), /openai-codex ≈3,00 \$/);
+	app.select("anthropic");
+	await flush();
+	assert.match(app.text(), /anthropic ≈4,00 \$/);
+	app.select("openrouter");
+	await flush();
+	assert.match(app.text(), /openrouter ≈5,00 \$/);
+	app.select("unknown");
+	await flush();
+	assert.match(app.text(), /unknown ≈0,00 \$/);
 });
 
 test("non-interactive sessions do not read costs or request quotas", async (t) => {

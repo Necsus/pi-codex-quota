@@ -3,8 +3,8 @@
 Extension locale pour [Pi](https://pi.dev) : coût mensuel estimé à gauche et quotas restants de l’abonnement du fournisseur actif à droite, sous le modèle et le niveau de réflexion.
 
 ```text
-Pi · oct. 2026 · ≈48,12 $ · openai-codex ≈20,00 $    Codex restant · 5h : 82% ↻ 2h15 · hebdo : 64% ↻ 3j4h
-Pi · oct. 2026 · ≈48,12 $ · anthropic ≈18,40 $       Anthropic restant · 5h : 75% ↻ 1h30 · hebdo : 50% ↻ 4j2h
+Pi · oct. 2026 · ≈20,00 $ (≈48,12 $)    Codex restant · 5h : 82% ↻ 2h15 · hebdo : 64% ↻ 3j4h
+Pi · oct. 2026 · ≈18,40 $ (≈48,12 $)    Anthropic restant · 5h : 75% ↻ 1h30 · hebdo : 50% ↻ 4j2h
 ```
 
 Le fournisseur du modèle sélectionné détermine les quotas affichés :
@@ -25,7 +25,7 @@ Les chiffres ci-dessus sont fictifs. L’affichage utilise le gris du thème Pi 
 - Mode terminal interactif.
 - Pour les quotas : connexion OAuth via `/login` au fournisseur `openai-codex` ou `anthropic`, puis sélection d’un modèle de ce fournisseur.
 
-Le coût mensuel global et le sous-total du fournisseur sélectionné sont affichés avec tous les fournisseurs. Une simple clé API OpenAI ou Anthropic ne donne pas accès aux quotas de l’abonnement. Pour Anthropic, le jeton OAuth doit autoriser la lecture du profil (`user:profile`) ; en cas de refus HTTP 403, reconnectez-vous via `/login`.
+Le coût mensuel du fournisseur sélectionné est affiché en premier, suivi du total global entre parenthèses, quel que soit le fournisseur. Une simple clé API OpenAI ou Anthropic ne donne pas accès aux quotas de l’abonnement. Pour Anthropic, le jeton OAuth doit autoriser la lecture du profil (`user:profile`) ; en cas de refus HTTP 403, reconnectez-vous via `/login`.
 
 ## Installation
 

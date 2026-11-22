@@ -41,9 +41,9 @@ export default function (pi: ExtensionAPI) {
 		const amount = currentCost ? `≈${currentCost.total.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $` : costFailed ? "indisponible" : "calcul…";
 		const providerId = context.model?.provider;
 		const providerAmount = currentCost && providerId
-			? ` · ${providerId} ≈${(currentCost.byProvider[providerId] ?? 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $`
-			: "";
-		const left = `Pi · ${label} · ${amount}${providerAmount}${currentCost?.incomplete || costFailed ? " · incomplet" : ""}`;
+			? `≈${(currentCost.byProvider[providerId] ?? 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $ (${amount})`
+			: amount;
+		const left = `Pi · ${label} · ${providerAmount}${currentCost?.incomplete || costFailed ? " · incomplet" : ""}`;
 		const provider = getQuotaProvider(context.model?.provider);
 		const currentSnapshot = snapshot?.provider === provider?.id ? snapshot : undefined;
 		let right = "";

@@ -159,16 +159,16 @@ test("monthly provider total follows model selection, including unsupported prov
 	const app = harness(t);
 	app.start();
 	await flush();
-	assert.match(app.text(), /openai-codex ≈3,00 \$/);
+	assert.match(app.text(), /≈3,00 \$ \(≈12,34 \$\)/);
 	app.select("anthropic");
 	await flush();
-	assert.match(app.text(), /anthropic ≈4,00 \$/);
+	assert.match(app.text(), /≈4,00 \$ \(≈12,34 \$\)/);
 	app.select("openrouter");
 	await flush();
-	assert.match(app.text(), /openrouter ≈5,00 \$/);
+	assert.match(app.text(), /≈5,00 \$ \(≈12,34 \$\)/);
 	app.select("unknown");
 	await flush();
-	assert.match(app.text(), /unknown ≈0,00 \$/);
+	assert.match(app.text(), /≈0,00 \$ \(≈12,34 \$\)/);
 });
 
 test("non-interactive sessions do not read costs or request quotas", async (t) => {
